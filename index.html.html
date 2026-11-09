@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Our Date Journal</title>
+<style>
+  :root{
+    --ink:#3b2f2a; --paper:#f6ecd6; --card:#fffdf6; --kraft:#cdb892;
+    --red:#b5473a; --teal:#4f7a75; --must:#d9a441; --ticket:#efd9a8;
+    --type:"American Typewriter","Special Elite","Courier New",Courier,monospace;
+    --hand:"Segoe Print","Bradley Hand","Chalkboard SE","Comic Sans MS",cursive;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh; padding:24px 12px 110px;
+    font-family:var(--type); color:var(--ink); background-color:var(--kraft);
+    background-image:radial-gradient(rgba(59,47,42,.12) 1px,transparent 1px); background-size:14px 14px;
+  }
+  button{font-family:inherit; color:inherit; cursor:pointer;}
+  .hand{font-family:var(--hand);}
+  .wrap{max-width:760px; margin:0 auto;}
+  .brand{display:flex; justify-content:center; align-items:center; gap:8px; margin:0; font:700 30px var(--hand);}
+
+  /* halaman buku */
+  .book{position:relative; margin-top:26px; padding:32px 12px 20px; background:var(--paper); border-radius:4px;
+    box-shadow:0 6px 0 rgba(59,47,42,.25),0 10px 18px rgba(59,47,42,.3);}
+  @media(min-width:640px){.book{padding:32px 24px 20px;}}
+  .spiral{position:absolute; top:-12px; left:0; right:0; display:flex; justify-content:space-around; padding:0 16px;}
+  .spiral span{width:10px; height:24px; border-radius:99px; border:2px solid var(--ink); background:var(--kraft);}
+  .nav{display:flex; align-items:center; justify-content:space-between;}
+  .nav h2{margin:0; font:400 24px var(--type);}
+  .sq{width:38px; height:38px; padding:0; font-size:22px; line-height:1; background:var(--card); border:2px solid var(--ink); box-shadow:3px 3px 0 var(--ink);}
+  .sq:active,.btn:active{transform:translateY(2px);}
+  .ticket{max-width:380px; margin:16px auto 0; padding:8px 16px; text-align:center; background:var(--ticket); border:2px dashed rgba(59,47,42,.6);}
+  .ticket p{margin:0;} .ticket .big{font-size:18px;} .ticket .sm{font-size:13px; opacity:.75;}
+  .dow,.grid{display:grid; grid-template-columns:repeat(7,1fr); gap:4px;}
+  .dow{margin-top:16px; text-align:center; font-size:12px; opacity:.7;}
+  .grid{margin-top:4px;}
+  .day{position:relative; aspect-ratio:3/4; padding:0; text-align:left; background:transparent; border:1.5px dashed rgba(59,47,42,.33); transition:transform .1s;}
+  @media(min-width:640px){.day{aspect-ratio:1;}}
+  .day:active{transform:scale(.95);}
+  .day.has{padding:2px; background:var(--card); border:2px solid var(--ink); box-shadow:2px 3px 5px rgba(59,47,42,.3);}
+  .day.today{outline:2px solid var(--red); outline-offset:1px;}
+  .day img{position:absolute; inset:2px; width:calc(100% - 4px); height:calc(100% - 4px); object-fit:cover; filter:sepia(.3);}
+  .day .n{position:relative; display:inline-block; margin:2px; padding:0 4px; font-size:12px;}
+  .day img + .n{background:var(--paper);}
+  .day .heart{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:20px; color:var(--red);}
+  .day .rate{position:absolute; right:-6px; bottom:-6px; width:28px; height:28px; display:flex; align-items:center; justify-content:center;
+    border-radius:50%; border:2px solid var(--red); color:var(--red); background:var(--paper); font-size:10px; transform:rotate(-12deg);}
+  .day .more{position:absolute; left:0; bottom:0; padding:0 4px; font-size:10px; background:var(--paper);}
+  .day .tape{top:-8px; left:50%; width:32px; height:12px; margin-left:-16px;}
+  .empty{margin:24px 0 0; text-align:center; font-size:22px;}
+
+  /* washi tape */
+  .tape{position:absolute; z-index:2; width:56px; height:16px; opacity:.8; background-color:var(--c,var(--must));
+    background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.22) 0 6px,transparent 6px 12px);}
+
+  .btn{padding:12px 20px; font-size:18px; background:var(--red); color:var(--paper); border:2px solid var(--ink); box-shadow:3px 3px 0 var(--ink);}
+  #fab{position:fixed; right:20px; bottom:24px; z-index:20; font-size:16px;}
+  #toast{display:none; position:fixed; left:50%; bottom:96px; transform:translateX(-50%); z-index:60; width:90%; max-width:380px;
+    padding:12px 16px; font-size:14px; background:var(--ink); color:var(--paper);}
+
+  /* modal: latar solid */
+  #overlay{display:none; position:fixed; inset:0; z-index:50; align-items:flex-end; justify-content:center; background:rgba(59,47,42,.72);}
+  #overlay.open{display:flex;}
+  @media(min-width:640px){#overlay{align-items:center;}}
+  #sheet{position:relative; width:100%; max-width:580px; max-height:92vh; max-height:92dvh; overflow-y:auto; padding:28px 20px 0;
+    color:var(--ink); font-family:var(--type); background-color:var(--paper);
+    background-image:linear-gradient(transparent 27px,rgba(79,122,117,.28) 28px); background-size:100% 28px;
+    border:3px solid var(--ink); box-shadow:6px 6px 0 rgba(0,0,0,.35);}
+  #sheet .t1{top:-4px; left:24px; transform:rotate(-6deg); --c:var(--teal);}
+  #sheet .t2{top:-4px; right:24px; transform:rotate(6deg);}
+  .mh{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;}
+  .mh h3{margin:0; font:700 30px var(--hand);}
+  .x{padding:6px; font-size:18px; background:none; border:0;}
+
+  /* form */
+  label{display:block; margin-top:16px; font-size:14px;}
+  input,textarea{width:100%; margin-top:4px; padding:10px 12px; font:inherit; color:var(--ink); background:var(--card);
+    border:1.5px solid rgba(59,47,42,.6); border-radius:2px; outline:none;}
+  input:focus,textarea:focus{box-shadow:0 0 0 2px rgba(181,71,58,.4);}
+  textarea{font:20px var(--hand);}
+  input[type=range]{padding:0; border:0; background:none; accent-color:var(--red);}
+  .rrow{display:flex; align-items:center; justify-content:space-between; margin-top:16px; font-size:14px;}
+  .badge{padding:2px 12px; font-size:16px; color:var(--red); background:var(--card); border:2px double var(--red);}
+  .uplabel{margin:16px 0 0; font-size:14px;}
+  .tiles{display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:8px;}
+  .tile{position:relative; padding:4px; background:var(--card); box-shadow:1px 2px 4px rgba(59,47,42,.3);}
+  .tile img,.tile video{display:block; width:100%; aspect-ratio:1; object-fit:cover;}
+  .tile .ft{position:absolute; left:6px; top:6px; font-size:14px;}
+  .tile .rm{position:absolute; right:-6px; top:-6px; width:20px; height:20px; padding:0; font-size:11px; line-height:1; border:0; border-radius:50%; background:var(--red); color:var(--paper);}
+  .addtile{aspect-ratio:1; font-size:26px; color:var(--red); background:rgba(255,253,246,.6); border:2px dashed rgba(59,47,42,.53);}
+  .foot{position:sticky; bottom:0; margin:16px -20px 0; padding:12px 20px 20px; background:var(--paper); border-top:2px dashed rgba(59,47,42,.33);}
+  .foot .btn{width:100%;} .err{margin:0 0 8px; font-size:14px; color:var(--red);}
+
+  /* detail */
+  article{margin-bottom:40px;} article > * + *{margin-top:20px;}
+  .hd{display:flex; align-items:flex-start; justify-content:space-between; gap:12px;}
+  .hd h3{margin:8px 0 0; font:700 30px/1.1 var(--hand);}
+  .chip{display:inline-block; padding:2px 8px; font-size:14px; color:var(--teal); background:var(--card); border:2px solid var(--teal); transform:rotate(-2deg);}
+  .stamp{flex:none; width:84px; height:84px; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:50%;
+    border:4px double var(--red); color:var(--red); background:rgba(246,236,214,.6); transform:rotate(-9deg);}
+  .stamp b{font-size:24px; line-height:1; font-weight:400;} .stamp small{font-size:10px;} .stamp span{font-size:16px; line-height:1;}
+  .pol{position:relative; flex:none; margin:0; padding:8px 8px 32px; background:var(--card); box-shadow:2px 4px 8px rgba(59,47,42,.35);}
+  .pol .tape{top:-8px; left:50%; margin-left:-28px; transform:rotate(-3deg);}
+  .pol .ph{width:100%; overflow:hidden; background:var(--kraft);}
+  .pol img,.pol video{display:block; width:100%; height:100%; object-fit:cover;}
+  .pol img{filter:sepia(.25) saturate(.9);}
+  .pol figcaption{position:absolute; left:0; right:0; bottom:4px; text-align:center; font:18px/1 var(--hand);}
+  .tall{aspect-ratio:4/5;} .one{aspect-ratio:1;}
+  .roll{display:flex; gap:16px; padding:12px 10px; overflow-x:auto; scroll-snap-type:x mandatory;}
+  .roll .pol{width:78%; scroll-snap-align:center;}
+  .snaps{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; padding:0 4px;}
+  .snaps .pol{padding:4px 4px 16px;}
+  .info{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .info div{padding:12px; background:var(--ticket); border:2px dashed rgba(59,47,42,.6);}
+  .info small{display:block; font-size:12px; opacity:.75;} .info p{margin:4px 0 0; font-size:14px; word-break:break-word;}
+  .h4{margin:0 0 6px; font:700 24px var(--hand);}
+  .story{margin:4px 0 0; padding:2px 12px; white-space:pre-wrap; font:22px/28px var(--hand); background-color:var(--card);
+    background-image:linear-gradient(transparent 27px,rgba(79,122,117,.28) 28px); background-size:100% 28px; border:1.5px solid rgba(59,47,42,.33);}
+  .acts button{padding:0; margin-right:20px; font-size:14px; background:none; border:0;}
+  .acts .e{color:var(--teal);} .acts .d{color:var(--red);}
+  .addmore{display:block; width:100%; margin:32px 0 20px; padding:10px; font-size:14px; color:var(--red); background:var(--card); border:2px dashed var(--red);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 class="brand">📖 Our Date Journal</h1>
+  <section class="book">
+    <div class="spiral" id="spiral" aria-hidden="true"></div>
+    <div class="nav">
+      <button class="sq" id="prev" aria-label="Previous month">‹</button>
+      <h2 id="monthTitle"></h2>
+      <button class="sq" id="next" aria-label="Next month">›</button>
+    </div>
+    <div class="ticket" id="summary"></div>
+    <div class="dow" id="dow"></div>
+    <div class="grid" id="grid"></div>
+    <p class="empty hand" id="empty"></p>
+  </section>
+</div>
+
+<button class="btn" id="fab" aria-label="Add date">+ Add Date</button>
+<div id="toast" role="status"></div>
+<div id="overlay"><div id="sheet" role="dialog" aria-modal="true" aria-label="Journal entry"></div></div>
+
+<script>
+const KEY = "our-date-journal-v1";
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DOW = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const MAX_VIDEO = 1.5 * 1024 * 1024;
+
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+const rp = (n) => "Rp " + Number(n || 0).toLocaleString("id-ID");
+const pad = (n) => String(n).padStart(2, "0");
+const keyOf = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`;
+const todayKey = () => { const t = new Date(); return keyOf(t.getFullYear(), t.getMonth(), t.getDate()); };
+const fmtDate = (k) => { const [y, m, d] = k.split("-").map(Number); return `${d} ${MONTHS[m - 1]} ${y}`; };
+const emoji = (v) => v >= 90 ? "🥰" : v >= 75 ? "😍" : v >= 60 ? "😊" : v >= 40 ? "🙂" : v >= 20 ? "😐" : "😕";
+const tilt = (i) => [-2.5, 1.8, -1, 2.6, -1.8][i % 5];
+
+let entries = [];
+try { entries = JSON.parse(localStorage.getItem(KEY) || "[]"); } catch (e) {}
+const now = new Date();
+let year = now.getFullYear(), month = now.getMonth(), detailKey = null, toastTimer;
+
+function persist() {
+  try { localStorage.setItem(KEY, JSON.stringify(entries)); }
+  catch (e) { toast("Storage is full. Your latest entry may not be saved permanently."); }
+}
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.style.display = "block";
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.style.display = "none"), 4500);
+}
+
+/* ---------- foto/video ---------- */
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onerror = reject;
+    fr.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const s = Math.min(1, 800 / Math.max(img.width, img.height));
+        const c = document.createElement("canvas");
+        c.width = img.width * s; c.height = img.height * s;
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        resolve(c.toDataURL("image/jpeg", 0.7));
+      };
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+const readAsData = (file) => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); });
+
+/* ---------- kalender ---------- */
+function render() {
+  $("#monthTitle").textContent = `${MONTHS[month]} ${year}`;
+  const prefix = `${year}-${pad(month + 1)}`;
+  const me = entries.filter((e) => e.date.startsWith(prefix));
+  const avg = me.length ? Math.round(me.reduce((a, e) => a + e.rating, 0) / me.length) : 0;
+  const spent = me.reduce((a, e) => a + e.budget, 0);
+  $("#summary").innerHTML = `<p class="big">${me.length} ${me.length === 1 ? "Date" : "Dates"} This Month</p>` +
+    (me.length ? `<p class="sm">avg ${avg}/100 · total ${rp(spent)}</p>` : "");
+
+  const lead = (new Date(year, month, 1).getDay() + 6) % 7;
+  const days = new Date(year, month + 1, 0).getDate();
+  let h = "";
+  for (let i = 0; i < lead; i++) h += "<div></div>";
+  for (let d = 1; d <= days; d++) {
+    const k = keyOf(year, month, d);
+    const list = entries.filter((e) => e.date === k);
+    const first = list[0];
+    const thumb = first && first.media.find((m) => m.type === "image");
+    h += `<button class="day${list.length ? " has" : ""}${k === todayKey() ? " today" : ""}" data-date="${k}"` +
+      `${list.length ? ` style="transform:rotate(${tilt(d)}deg)"` : ""} aria-label="${fmtDate(k)}${list.length ? ", has memory" : ""}">` +
+      (thumb ? `<img src="${thumb.src}" alt="">` : list.length ? `<span class="heart">❤</span>` : "") +
+      (list.length ? `<span class="tape" style="--c:${tilt(d) > 0 ? "var(--teal)" : "var(--must)"}"></span>` : "") +
+      `<span class="n">${d}</span>` +
+      (first ? `<span class="rate">${first.rating}</span>` : "") +
+      (list.length > 1 ? `<span class="more">+${list.length - 1}</span>` : "") +
+      `</button>`;
+  }
+  $("#grid").innerHTML = h;
+  $("#empty").textContent = entries.length ? "" : "This page is still empty. Tap a date to paste your first memory.";
+}
+
+/* ---------- modal ---------- */
+function openModal(html) {
+  const s = $("#sheet");
+  s.innerHTML = `<span class="tape t1"></span><span class="tape t2"></span>` + html;
+  $("#overlay").classList.add("open");
+  document.body.style.overflow = "hidden";
+  s.scrollTop = 0;
+}
+function closeModal() {
+  $("#overlay").classList.remove("open");
+  $("#sheet").innerHTML = "";
+  document.body.style.overflow = "";
+  detailKey = null;
+}
+
+function mediaTag(m, controls) {
+  return m.type === "video" ? `<video src="${m.src}"${controls ? " controls" : ""}></video>` : `<img src="${m.src}" alt="">`;
+}
+
+function openDetail(k) {
+  const list = entries.filter((e) => e.date === k);
+  if (!list.length) return closeModal();
+  detailKey = k;
+  const body = list.map((e) => `
+    <article>
+      <div class="hd">
+        <div>
+          <span class="chip">${fmtDate(e.date)}</span>
+          <h3>${esc(e.title)}</h3>
+        </div>
+        <div class="stamp"><b>${e.rating}</b><small>out of 100</small><span>${emoji(e.rating)}</span></div>
+      </div>
+      ${e.media.length ? `<div class="roll">${e.media.map((m, i) => `
+        <figure class="pol" style="transform:rotate(${tilt(i)}deg)">
+          <span class="tape" style="--c:${i % 2 ? "var(--teal)" : "var(--must)"}"></span>
+          <div class="ph tall">${mediaTag(m, true)}</div>
+          <figcaption>photo ${i + 1}/${e.media.length}</figcaption>
+        </figure>`).join("")}</div>` : ""}
+      <div class="info">
+        <div><small>📍 Location</small><p>${esc(e.place) || "-"}</p></div>
+        <div><small>💰 Budget</small><p>${rp(e.budget)}</p></div>
+      </div>
+      ${e.snaps.length ? `<section><h4 class="h4">Random snapshots</h4><div class="snaps">${e.snaps.map((s, i) => `
+        <figure class="pol" style="transform:rotate(${tilt(i + 2)}deg)">
+          <span class="tape" style="--c:${i % 2 ? "var(--must)" : "var(--teal)"}"></span>
+          <div class="ph one">${mediaTag(s)}</div>
+        </figure>`).join("")}</div></section>` : ""}
+      ${e.story ? `<section><h4 class="h4">Today's story</h4><p class="story">${esc(e.story)}</p></section>` : ""}
+      <div class="acts">
+        <button class="e" data-act="edit" data-id="${e.id}">✏️ Edit this entry</button>
+        <button class="d" data-act="del" data-id="${e.id}">🗑️ Delete this entry</button>
+      </div>
+    </article>`).join("");
+  openModal(`
+    <div class="mh"><span></span><button class="x" data-act="close" aria-label="Close">✕</button></div>
+    ${body}
+    <button class="addmore" data-act="add">Add another date on this day</button>`);
+  detailKey = k;
+}
+
+function uploader(root, list, accept, label, icon) {
+  const draw = () => {
+    root.innerHTML = `<p class="uplabel">${icon} ${label}</p><div class="tiles">` +
+      list.map((m, i) => `<div class="tile" style="transform:rotate(${tilt(i)}deg)">${mediaTag(m)}${m.type === "video" ? `<span class="ft">🎞️</span>` : ""}` +
+        `<button type="button" class="rm" data-i="${i}" aria-label="Remove">✕</button></div>`).join("") +
+      `<button type="button" class="addtile" aria-label="Add file">+</button></div><input type="file" multiple accept="${accept}" hidden>`;
+    const inp = $("input", root);
+    $(".addtile", root).onclick = () => inp.click();
+    root.querySelectorAll(".rm").forEach((b) => (b.onclick = () => { list.splice(+b.dataset.i, 1); draw(); }));
+    inp.onchange = async () => {
+      for (const f of [...inp.files]) {
+        try {
+          if (f.type.startsWith("video/")) {
+            if (f.size > MAX_VIDEO) { toast(`Video "${f.name}" is over 1.5 MB and was skipped (browser storage limit).`); continue; }
+            list.push({ type: "video", src: await readAsData(f) });
+          } else if (f.type.startsWith("image/")) list.push({ type: "image", src: await compressImage(f) });
+        } catch (e) { toast(`Couldn't read "${f.name}".`); }
+      }
+      draw();
+    };
+  };
+  draw();
+}
+
+function openForm(dateKey, entry) {
+  const draft = { media: [...(entry ? entry.media : [])], snaps: [...(entry ? entry.snaps : [])] };
+  let budget = entry && entry.budget ? String(entry.budget) : "";
+  openModal(`
+    <div class="mh"><h3>✏️ ${entry ? "Edit Date" : "Add Date"}</h3><button class="x" data-act="close" aria-label="Close">✕</button></div>
+    <form id="f" novalidate>
+      <label>Title<input id="fTitle" value="${esc(entry ? entry.title : "")}" placeholder="e.g. Rooftop dinner"></label>
+      <label>Date<input id="fDate" type="date" value="${esc(entry ? entry.date : dateKey)}"></label>
+      <div class="rrow"><span>Today's rating</span><span class="badge" id="fBadge"></span></div>
+      <input id="fRating" type="range" min="1" max="100" value="${entry ? entry.rating : 80}" aria-label="Rating from 1 to 100">
+      <label>Places visited<input id="fPlace" value="${esc(entry ? entry.place : "")}" placeholder="Separate with commas: Kopi Kenangan, Grand Indonesia"></label>
+      <label>Total budget<input id="fBudget" inputmode="numeric" placeholder="Rp 0"></label>
+      <div id="upMedia"></div>
+      <div id="upSnaps"></div>
+      <label>Notes<textarea id="fStory" rows="4" placeholder="Today's story">${esc(entry ? entry.story : "")}</textarea></label>
+      <div class="foot">
+        <p class="err" id="fErr" role="alert"></p>
+        <button class="btn" type="submit">${entry ? "Save changes" : "Paste in journal"}</button>
+      </div>
+    </form>`);
+
+  const r = $("#fRating"), badge = $("#fBadge");
+  const upd = () => (badge.textContent = `${emoji(+r.value)} ${r.value}/100`);
+  r.oninput = upd; upd();
+
+  const bi = $("#fBudget");
+  bi.value = budget ? rp(budget) : "";
+  bi.oninput = () => { budget = bi.value.replace(/\D/g, "").slice(0, 12); bi.value = budget ? rp(budget) : ""; };
+
+  uploader($("#upMedia"), draft.media, "image/*,video/*", "Main photos & videos", "📷");
+  uploader($("#upSnaps"), draft.snaps, "image/*", "Random snapshots (OOTD, place tags, receipts)", "🖼️");
+
+  $("#f").onsubmit = (ev) => {
+    ev.preventDefault();
+    const err = (m) => ($("#fErr").textContent = m);
+    const title = $("#fTitle").value.trim(), date = $("#fDate").value;
+    if (!title) { err("Add a title first."); $("#fTitle").focus(); return; }
+    if (!date) { err("Pick a date first."); return; }
+    const rec = {
+      id: entry ? entry.id : Date.now().toString(36),
+      title, date, rating: +r.value, place: $("#fPlace").value.trim(), budget: Number(budget || 0),
+      media: draft.media, snaps: draft.snaps, story: $("#fStory").value.trim(),
+    };
+    entries = entry ? entries.map((x) => (x.id === rec.id ? rec : x)) : [...entries, rec];
+    persist();
+    year = +date.slice(0, 4); month = +date.slice(5, 7) - 1;
+    render();
+    if (entry) openDetail(date); else closeModal();
+  };
+}
+
+/* ---------- event ---------- */
+$("#sheet").addEventListener("click", (e) => {
+  const t = e.target.closest("[data-act]");
+  if (!t) return;
+  const a = t.dataset.act, id = t.dataset.id;
+  if (a === "close") closeModal();
+  else if (a === "edit") { const en = entries.find((x) => x.id === id); if (en) openForm(en.date, en); }
+  else if (a === "del") {
+    if (!confirm("Delete this memory?")) return;
+    const k = detailKey;
+    entries = entries.filter((x) => x.id !== id);
+    persist(); render(); openDetail(k);
+  }
+  else if (a === "add") openForm(detailKey);
+});
+$("#overlay").addEventListener("click", (e) => { if (e.target.id === "overlay") closeModal(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+$("#grid").addEventListener("click", (e) => {
+  const b = e.target.closest(".day");
+  if (!b) return;
+  const k = b.dataset.date;
+  entries.some((x) => x.date === k) ? openDetail(k) : openForm(k);
+});
+$("#prev").onclick = () => { const t = new Date(year, month - 1, 1); year = t.getFullYear(); month = t.getMonth(); render(); };
+$("#next").onclick = () => { const t = new Date(year, month + 1, 1); year = t.getFullYear(); month = t.getMonth(); render(); };
+$("#fab").onclick = () => openForm(todayKey());
+
+$("#spiral").innerHTML = "<span></span>".repeat(14);
+$("#dow").innerHTML = DOW.map((d) => `<div>${d}</div>`).join("");
+render();
+</script>
+</body>
+</html>
