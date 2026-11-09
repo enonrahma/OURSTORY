@@ -50,6 +50,7 @@
     border-radius:50%; border:2px solid var(--red); color:var(--red); background:var(--paper); font-size:10px; transform:rotate(-12deg);}
   .day .more{position:absolute; left:0; bottom:0; padding:0 4px; font-size:10px; background:var(--paper);}
   .day .tape{top:-8px; left:50%; width:32px; height:12px; margin-left:-16px;}
+  .sync{margin:4px 0 0; text-align:center; font-size:12px; opacity:.7;}
   .empty{margin:24px 0 0; text-align:center; font-size:22px;}
 
   /* washi tape */
@@ -127,6 +128,7 @@
 <body>
 <div class="wrap">
   <h1 class="brand">📖 Our Date Journal</h1>
+  <p class="sync" id="sync"></p>
   <section class="book">
     <div class="spiral" id="spiral" aria-hidden="true"></div>
     <div class="nav">
@@ -151,6 +153,13 @@ const MONTHS = ["January","February","March","April","May","June","July","August
 const DOW = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const MAX_VIDEO = 1.5 * 1024 * 1024;
 
+/* ===== SHARED / LIVE MODE =====
+   FIREBASE_URL: URL Firebase Realtime Database, contoh "https://nama-proyek-default-rtdb.firebaseio.com"
+   Kosong = data hanya tersimpan di browser ini (tidak dibagi ke perangkat lain). */
+const CONFIG = { FIREBASE_URL: "https://kenny-neng-story-default-rtdb.asia-southeast1.firebasedatabase.app/" };
+const REMOTE = CONFIG.FIREBASE_URL.replace(/\/+$/, "");
+let useRemote = false, roomPath = "", remote = {}, firstSnap = true, modalMode = null;
+
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 const rp = (n) => "Rp " + Number(n || 0).toLocaleString("id-ID");
@@ -167,6 +176,7 @@ const now = new Date();
 let year = now.getFullYear(), month = now.getMonth(), detailKey = null, toastTimer;
 
 function persist() {
+  if (useRemote) return;
   try { localStorage.setItem(KEY, JSON.stringify(entries)); }
   catch (e) { toast("Storage is full. Your latest entry may not be saved permanently."); }
 }
@@ -241,7 +251,7 @@ function closeModal() {
   $("#overlay").classList.remove("open");
   $("#sheet").innerHTML = "";
   document.body.style.overflow = "";
-  detailKey = null;
+  detailKey = null; modalMode = null;
 }
 
 function mediaTag(m, controls) {
@@ -286,7 +296,7 @@ function openDetail(k) {
     <div class="mh"><span></span><button class="x" data-act="close" aria-label="Close">✕</button></div>
     ${body}
     <button class="addmore" data-act="add">Add another date on this day</button>`);
-  detailKey = k;
+  detailKey = k; modalMode = "detail";
 }
 
 function uploader(root, list, accept, label, icon) {
@@ -334,6 +344,7 @@ function openForm(dateKey, entry) {
       </div>
     </form>`);
 
+  modalMode = "form";
   const r = $("#fRating"), badge = $("#fBadge");
   const upd = () => (badge.textContent = `${emoji(+r.value)} ${r.value}/100`);
   r.oninput = upd; upd();
@@ -357,11 +368,84 @@ function openForm(dateKey, entry) {
       media: draft.media, snaps: draft.snaps, story: $("#fStory").value.trim(),
     };
     entries = entry ? entries.map((x) => (x.id === rec.id ? rec : x)) : [...entries, rec];
-    persist();
+    syncSave(rec);
     year = +date.slice(0, 4); month = +date.slice(5, 7) - 1;
     render();
     if (entry) openDetail(date); else closeModal();
   };
+}
+
+/* ---------- sinkronisasi live (Firebase Realtime Database via REST + streaming) ---------- */
+const toArr = (v) => (Array.isArray(v) ? v.filter(Boolean) : v ? Object.values(v) : []);
+const norm = (e) => ({ ...e, media: toArr(e.media), snaps: toArr(e.snaps), place: e.place || "", story: e.story || "",
+  budget: Number(e.budget || 0), rating: Number(e.rating || 0) });
+const api = (id) => `${REMOTE}/${roomPath}/entries${id ? "/" + id : ""}.json`;
+const setSync = (t) => { $("#sync").textContent = useRemote ? "● " + t : ""; };
+const syncFail = () => toast("Couldn't sync. Check your connection and the Firebase rules.");
+
+function syncSave(rec) {
+  persist();
+  if (!useRemote) return;
+  remote[rec.id] = rec;
+  fetch(api(rec.id), { method: "PUT", body: JSON.stringify(rec) }).then((r) => { if (!r.ok) throw 0; }).catch(syncFail);
+}
+function syncDelete(id) {
+  persist();
+  if (!useRemote) return;
+  delete remote[id];
+  fetch(api(id), { method: "DELETE" }).then((r) => { if (!r.ok) throw 0; }).catch(syncFail);
+}
+function applyRemote() {
+  entries = Object.values(remote).filter(Boolean).map(norm);
+  render();
+  if (modalMode === "detail" && detailKey) {
+    const top = $("#sheet").scrollTop, k = detailKey;
+    openDetail(k); $("#sheet").scrollTop = top;
+  }
+}
+function afterRemote() {
+  applyRemote();
+  if (firstSnap) {
+    firstSnap = false;
+    const local = (() => { try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch (e) { return []; } })();
+    if (!entries.length && local.length && confirm(`Upload ${local.length} entries saved on this device to the shared journal?`)) {
+      local.forEach((e) => { remote[e.id] = e; fetch(api(e.id), { method: "PUT", body: JSON.stringify(e) }).catch(syncFail); });
+      applyRemote();
+    }
+  }
+}
+function applyPath(path, data) {
+  if (path === "/") { remote = data || {}; return; }
+  const p = path.split("/").filter(Boolean);
+  if (p.length !== 1) return;
+  if (data === null) delete remote[p[0]]; else remote[p[0]] = data;
+}
+function getRoom() {
+  let c = localStorage.getItem("journal-code") || "";
+  while (!/^[a-z0-9_-]{8,}$/.test(c)) {
+    const v = prompt("Enter your shared journal code (min. 8 characters: letters, numbers, - or _). Use the same code on every device.");
+    if (v === null) return null;
+    c = v.trim().toLowerCase().replace(/\s+/g, "-");
+  }
+  localStorage.setItem("journal-code", c);
+  return c;
+}
+function initSync() {
+  if (!REMOTE) return;
+  const code = getRoom();
+  if (!code) return;
+  roomPath = "rooms/" + code; useRemote = true; entries = [];
+  render(); setSync("connecting…");
+  const es = new EventSource(api());
+  es.addEventListener("put", (ev) => { const m = JSON.parse(ev.data); applyPath(m.path, m.data); afterRemote(); });
+  es.addEventListener("patch", (ev) => {
+    const m = JSON.parse(ev.data);
+    for (const k in m.data) applyPath((m.path === "/" ? "" : m.path) + "/" + k, m.data[k]);
+    afterRemote();
+  });
+  es.addEventListener("cancel", () => { setSync("access denied (check Firebase rules)"); toast("Firebase denied access. Check the rules."); });
+  es.onopen = () => setSync("live");
+  es.onerror = () => setSync("reconnecting…");
 }
 
 /* ---------- event ---------- */
@@ -375,7 +459,7 @@ $("#sheet").addEventListener("click", (e) => {
     if (!confirm("Delete this memory?")) return;
     const k = detailKey;
     entries = entries.filter((x) => x.id !== id);
-    persist(); render(); openDetail(k);
+    syncDelete(id); render(); openDetail(k);
   }
   else if (a === "add") openForm(detailKey);
 });
@@ -394,6 +478,7 @@ $("#fab").onclick = () => openForm(todayKey());
 $("#spiral").innerHTML = "<span></span>".repeat(14);
 $("#dow").innerHTML = DOW.map((d) => `<div>${d}</div>`).join("");
 render();
+initSync();
 </script>
 </body>
 </html>
