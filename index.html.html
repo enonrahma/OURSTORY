@@ -51,6 +51,14 @@
   .day .more{position:absolute; left:0; bottom:0; padding:0 4px; font-size:10px; background:var(--paper);}
   .day .tape{top:-8px; left:50%; width:32px; height:12px; margin-left:-16px;}
   .sync{margin:4px 0 0; text-align:center; font-size:12px; opacity:.7;}
+  .linkbtn{padding:0; margin-left:6px; font-size:12px; background:none; border:0; text-decoration:underline;}
+  #gate{display:none; position:fixed; inset:0; z-index:100; align-items:center; justify-content:center; padding:20px; background-color:var(--kraft);
+    background-image:radial-gradient(rgba(59,47,42,.12) 1px,transparent 1px); background-size:14px 14px;}
+  #gate.open{display:flex;}
+  .gatebox{width:100%; max-width:380px; padding:24px; background:var(--paper); border:3px solid var(--ink); box-shadow:6px 6px 0 rgba(0,0,0,.35);}
+  .gatebox h2{margin:0 0 8px; font:700 30px var(--hand);} .gatebox p{font-size:14px;} .gatebox .btn{width:100%; margin-top:12px;}
+  #notice{display:none; position:fixed; top:12px; left:50%; transform:translateX(-50%); z-index:70; width:92%; max-width:420px; padding:12px 16px;
+    font-size:14px; text-align:left; background:var(--must); color:var(--ink); border:2px solid var(--ink); box-shadow:3px 3px 0 var(--ink);}
   .empty{margin:24px 0 0; text-align:center; font-size:22px;}
 
   /* washi tape */
@@ -128,7 +136,7 @@
 <body>
 <div class="wrap">
   <h1 class="brand">📖 Our Date Journal</h1>
-  <p class="sync" id="sync"></p>
+  <p class="sync"><span id="sync"></span><button class="linkbtn" id="switch" hidden>switch code</button><button class="linkbtn" id="alerts" hidden>enable alerts</button></p>
   <section class="book">
     <div class="spiral" id="spiral" aria-hidden="true"></div>
     <div class="nav">
@@ -145,6 +153,14 @@
 
 <button class="btn" id="fab" aria-label="Add date">+ Add Date</button>
 <div id="toast" role="status"></div>
+<button id="notice" type="button"></button>
+<div id="gate"><form class="gatebox" id="gateForm">
+  <h2>📖 Our Date Journal</h2>
+  <p>Enter your shared journal code to open the journal. Use the same code on every device.</p>
+  <input id="gateCode" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="min. 8 characters">
+  <p class="err" id="gateErr" role="alert"></p>
+  <button class="btn" type="submit">Open journal</button>
+</form></div>
 <div id="overlay"><div id="sheet" role="dialog" aria-modal="true" aria-label="Journal entry"></div></div>
 
 <script>
@@ -158,7 +174,7 @@ const MAX_VIDEO = 1.5 * 1024 * 1024;
    Kosong = data hanya tersimpan di browser ini (tidak dibagi ke perangkat lain). */
 const CONFIG = { FIREBASE_URL: "https://kenny-neng-story-default-rtdb.asia-southeast1.firebasedatabase.app/" };
 const REMOTE = CONFIG.FIREBASE_URL.replace(/\/+$/, "");
-let useRemote = false, roomPath = "", remote = {}, firstSnap = true, modalMode = null;
+let useRemote = false, roomPath = "", remote = {}, firstSnap = true, modalMode = null, notices = [], ownIds = new Set(), noticeTimer;
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
@@ -380,13 +396,14 @@ const toArr = (v) => (Array.isArray(v) ? v.filter(Boolean) : v ? Object.values(v
 const norm = (e) => ({ ...e, media: toArr(e.media), snaps: toArr(e.snaps), place: e.place || "", story: e.story || "",
   budget: Number(e.budget || 0), rating: Number(e.rating || 0) });
 const api = (id) => `${REMOTE}/${roomPath}/entries${id ? "/" + id : ""}.json`;
-const setSync = (t) => { $("#sync").textContent = useRemote ? "● " + t : ""; };
+const setSync = (t) => { $("#sync").textContent = useRemote ? "● " + t : ""; $("#switch").hidden = !useRemote;
+  $("#alerts").hidden = !(useRemote && "Notification" in window && Notification.permission === "default"); };
 const syncFail = () => toast("Couldn't sync. Check your connection and the Firebase rules.");
 
 function syncSave(rec) {
   persist();
   if (!useRemote) return;
-  remote[rec.id] = rec;
+  ownIds.add(rec.id); remote[rec.id] = rec;
   fetch(api(rec.id), { method: "PUT", body: JSON.stringify(rec) }).then((r) => { if (!r.ok) throw 0; }).catch(syncFail);
 }
 function syncDelete(id) {
@@ -405,36 +422,47 @@ function applyRemote() {
 }
 function afterRemote() {
   applyRemote();
+  flushNotices();
   if (firstSnap) {
     firstSnap = false;
     const local = (() => { try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch (e) { return []; } })();
     if (!entries.length && local.length && confirm(`Upload ${local.length} entries saved on this device to the shared journal?`)) {
-      local.forEach((e) => { remote[e.id] = e; fetch(api(e.id), { method: "PUT", body: JSON.stringify(e) }).catch(syncFail); });
+      local.forEach((e) => { ownIds.add(e.id); remote[e.id] = e; fetch(api(e.id), { method: "PUT", body: JSON.stringify(e) }).catch(syncFail); });
       applyRemote();
     }
   }
 }
 function applyPath(path, data) {
-  if (path === "/") { remote = data || {}; return; }
+  if (path === "/") {
+    if (!firstSnap) for (const id in (data || {})) if (!(id in remote) && !ownIds.delete(id)) notices.push({ isNew: true, e: data[id] });
+    remote = data || {}; return;
+  }
   const p = path.split("/").filter(Boolean);
   if (p.length !== 1) return;
-  if (data === null) delete remote[p[0]]; else remote[p[0]] = data;
+  const id = p[0];
+  if (data === null) { delete remote[id]; ownIds.delete(id); return; }
+  if (!firstSnap && !ownIds.delete(id)) notices.push({ isNew: !(id in remote), e: data });
+  remote[id] = data;
 }
-function getRoom() {
-  let c = localStorage.getItem("journal-code") || "";
-  while (!/^[a-z0-9_-]{8,}$/.test(c)) {
-    const v = prompt("Enter your shared journal code (min. 8 characters: letters, numbers, - or _). Use the same code on every device.");
-    if (v === null) return null;
-    c = v.trim().toLowerCase().replace(/\s+/g, "-");
+function flushNotices() {
+  const list = notices; notices = [];
+  if (!list.length) return;
+  const n = list[list.length - 1], e = n.e || {};
+  const msg = `${n.isNew ? "New date added" : "Date updated"}: ${e.title || "Untitled"}${list.length > 1 ? ` (+${list.length - 1} more)` : ""}`;
+  const box = $("#notice");
+  box.textContent = "💌 " + msg + " — tap to view";
+  box.dataset.date = e.date || ""; box.style.display = "block";
+  clearTimeout(noticeTimer); noticeTimer = setTimeout(() => (box.style.display = "none"), 10000);
+  if (document.hidden) {
+    document.title = "💌 " + msg;
+    try { if ("Notification" in window && Notification.permission === "granted") new Notification("Our Date Journal", { body: msg }); } catch (err) {}
   }
-  localStorage.setItem("journal-code", c);
-  return c;
 }
-function initSync() {
-  if (!REMOTE) return;
-  const code = getRoom();
-  if (!code) return;
-  roomPath = "rooms/" + code; useRemote = true; entries = [];
+const CODE_RE = /^[a-z0-9_-]{8,}$/;
+function startRoom(code) {
+  localStorage.setItem("journal-code", code);
+  roomPath = "rooms/" + code; useRemote = true; entries = []; remote = {}; firstSnap = true;
+  $("#gate").classList.remove("open"); document.body.style.overflow = "";
   render(); setSync("connecting…");
   const es = new EventSource(api());
   es.addEventListener("put", (ev) => { const m = JSON.parse(ev.data); applyPath(m.path, m.data); afterRemote(); });
@@ -447,6 +475,32 @@ function initSync() {
   es.onopen = () => setSync("live");
   es.onerror = () => setSync("reconnecting…");
 }
+function initSync() {
+  if (!REMOTE) return;
+  entries = []; render(); // mode bersama: jangan tampilkan data lokal sebelum kode dimasukkan
+  const saved = localStorage.getItem("journal-code") || "";
+  if (CODE_RE.test(saved)) startRoom(saved);
+  else { $("#gate").classList.add("open"); document.body.style.overflow = "hidden"; setTimeout(() => $("#gateCode").focus(), 50); }
+}
+$("#gateForm").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const c = $("#gateCode").value.trim().toLowerCase().replace(/\s+/g, "-");
+  if (!CODE_RE.test(c)) { $("#gateErr").textContent = "At least 8 characters: letters, numbers, - or _."; return; }
+  startRoom(c);
+});
+$("#switch").onclick = () => {
+  if (!confirm("Leave this journal on this device? You'll need the code to open it again.")) return;
+  localStorage.removeItem("journal-code"); location.reload();
+};
+
+$("#notice").onclick = () => {
+  const b = $("#notice"), d = b.dataset.date;
+  b.style.display = "none";
+  if (!d || modalMode === "form") return;
+  year = +d.slice(0, 4); month = +d.slice(5, 7) - 1; render(); openDetail(d);
+};
+$("#alerts").onclick = () => { Notification.requestPermission().then(() => setSync(useRemote ? "live" : "")); };
+document.addEventListener("visibilitychange", () => { if (!document.hidden) document.title = "Our Date Journal"; });
 
 /* ---------- event ---------- */
 $("#sheet").addEventListener("click", (e) => {
