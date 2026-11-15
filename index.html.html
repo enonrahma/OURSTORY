@@ -279,7 +279,7 @@ function openDetail(k) {
         </figure>`).join("")}</div>` : ""}
       <div class="info">
         <div><small>📍 Location</small><p>${esc(e.place) || "-"}</p></div>
-        <div><small>💰 Budget</small><p>${rp(e.budget)}</p></div>
+        <div><small>💰 Total cost</small><p>${rp(e.budget)}</p></div>
       </div>
       ${e.snaps.length ? `<section><h4 class="h4">Random snapshots</h4><div class="snaps">${e.snaps.map((s, i) => `
         <figure class="pol" style="transform:rotate(${tilt(i + 2)}deg)">
@@ -334,7 +334,7 @@ function openForm(dateKey, entry) {
       <div class="rrow"><span>Today's rating</span><span class="badge" id="fBadge"></span></div>
       <input id="fRating" type="range" min="1" max="100" value="${entry ? entry.rating : 80}" aria-label="Rating from 1 to 100">
       <label>Places visited<input id="fPlace" value="${esc(entry ? entry.place : "")}" placeholder="Separate with commas: Kopi Kenangan, Grand Indonesia"></label>
-      <label>Total budget<input id="fBudget" inputmode="numeric" placeholder="Rp 0"></label>
+      <label>Total cost<input id="fBudget" inputmode="numeric" placeholder="Rp 0"></label>
       <div id="upMedia"></div>
       <div id="upSnaps"></div>
       <label>Notes<textarea id="fStory" rows="4" placeholder="Today's story">${esc(entry ? entry.story : "")}</textarea></label>
